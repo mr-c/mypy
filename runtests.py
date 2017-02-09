@@ -34,7 +34,7 @@ from mypy.test.testpythoneval import python_eval_files, python_34_eval_files
 import itertools
 import os
 import re
-
+from pkg_resources import Requirement, resource_filename, ResolutionError
 
 # Ideally, all tests would be `discover`able so that they can be driven
 # (and parallelized) by an external test driver.
@@ -50,8 +50,16 @@ class Driver:
         self.verbosity = verbosity
         self.waiter = Waiter(verbosity=verbosity, limit=parallel_limit, xfail=xfail)
         self.versions = get_versions()
-        self.cwd = os.getcwd()
+        if os.path.isfile(os.path.join(os.getcwd(), 'setup.py')):
+            self.cwd = os.getcwd()
+        else:
+            self.cwd = resource_filename(Requirement.parse('mypy'), '.')
         self.mypy = os.path.join(self.cwd, 'scripts', 'mypy')
+        self.mypycmd = [sys.executable]
+        if os.path.isfile(self.mypy):
+            self.mypycmd.append(self.mypy)
+        else:
+            self.mypycmd.extend(['-m', 'mypy'])
         self.env = dict(os.environ)
         self.coverage = coverage
 
@@ -80,7 +88,7 @@ class Driver:
         full_name = 'check %s' % name
         if not self.allow(full_name):
             return
-        args = [sys.executable, self.mypy] + mypy_args
+        args = self.mypycmd + mypy_args
         args.append('--show-traceback')
         self.waiter.add(LazySubprocess(full_name, args, cwd=cwd, env=self.env))
 
@@ -168,7 +176,11 @@ def add_basic(driver: Driver) -> None:
     if False:
         driver.add_mypy('file setup.py', 'setup.py')
     driver.add_mypy('file runtests.py', 'runtests.py')
-    driver.add_mypy('legacy entry script', 'scripts/mypy')
+    if os.path.isfile('scripts/mypy'):
+        driver.add_mypy('legacy entry script', 'scripts/mypy')
+    else:
+        driver.add_mypy('legacy entry script',
+                os.path.join(sys.prefix, 'bin', 'mypy'))
     driver.add_mypy('legacy myunit script', 'scripts/myunit')
     # needs typed_ast installed:
     driver.add_mypy('fast-parse', '--fast-parse', 'test-data/samples/hello.py')

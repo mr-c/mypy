@@ -50,6 +50,9 @@ def find_data_files(base, globs):
             files += glob.glob(os.path.join(rv_dir, pat))
         if not files:
             continue
+        for f in files:
+            if not os.path.isfile(f):
+                files.remove(f)
         target = os.path.join('lib', 'mypy', rv_dir)
         rv.append((target, files))
 
@@ -73,6 +76,7 @@ data_files = []
 data_files += find_data_files('typeshed', ['*.py', '*.pyi'])
 
 data_files += find_data_files('xml', ['*.xsd', '*.xslt', '*.css'])
+data_files += find_data_files('test-data', ['*.*'])
 
 classifiers = [
     'Development Status :: 2 - Pre-Alpha',
@@ -115,7 +119,7 @@ setup(name='mypy',
       platforms=['POSIX'],
       package_dir=package_dir,
       py_modules=[],
-      packages=['mypy'],
+      packages=['mypy', 'mypy.test', 'mypy.myunit'],
       scripts=scripts,
       data_files=data_files,
       classifiers=classifiers,

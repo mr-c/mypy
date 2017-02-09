@@ -1,6 +1,7 @@
 import os
 import os.path
-
+from pkg_resources import Requirement, resource_filename, ResolutionError
+import sys
 import typing
 
 
@@ -10,8 +11,10 @@ PREFIX = os.path.dirname(os.path.dirname(this_file_dir))
 # Location of test data files such as test case descriptions.
 test_data_prefix = os.path.join(PREFIX, 'test-data', 'unit')
 
-assert os.path.isdir(test_data_prefix), \
-    'Test data prefix ({}) not set correctly'.format(test_data_prefix)
+if not os.path.isdir(test_data_prefix):
+    test_data_prefix = os.path.join(sys.prefix, 'lib', 'mypy', 'test-data', 'unit')
+
+assert os.path.isdir(test_data_prefix), 'Test data prefix ({}) not set correctly'.format(test_data_prefix)
 
 # Temp directory used for the temp files created when running test cases.
 # This is *within* the tempfile.TemporaryDirectory that is chroot'ed per testcase.
