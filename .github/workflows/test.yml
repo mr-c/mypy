@@ -31,41 +31,55 @@ jobs:
         include:
         # Make sure to run mypyc compiled unit tests for both
         # the oldest and newest supported Python versions
-        - name: Test suite with py310-ubuntu, mypyc-compiled
+        - name: Test suite with py310-ubuntu-arm, mypyc-compiled
           python: '3.10'
           os: ubuntu-24.04-arm
           toxenv: py
           tox_extra_args: "-n 4"
           test_mypyc: true
-        - name: Test suite with py311-ubuntu
+        - name: Test suite with py311-ubuntu-arm
           python: '3.11'
           os: ubuntu-24.04-arm
           toxenv: py
           tox_extra_args: "-n 4"
-        - name: Test suite with py312-ubuntu
+        - name: Test suite with py312-ubuntu-arm
           python: '3.12'
           os: ubuntu-24.04-arm
           toxenv: py
           tox_extra_args: "-n 4"
-        - name: Test suite with py313-ubuntu, mypyc-compiled
+        - name: Test suite with py313-ubuntu-arm, mypyc-compiled
           python: '3.13'
           os: ubuntu-24.04-arm
           toxenv: py
           tox_extra_args: "-n 4"
           test_mypyc: true
-        - name: Test suite with py314-ubuntu, mypyc-compiled
+        - name: Test suite with py314-ubuntu-arm, mypyc-compiled
           python: '3.14'
           os: ubuntu-24.04-arm
           toxenv: py
           tox_extra_args: "-n 4"
           test_mypyc: true
-        - name: Test suite with py315-ubuntu, mypyc-compiled
+        - name: Test suite with py315-ubuntu-arm, mypyc-compiled
           python: '3.15'
           os: ubuntu-24.04-arm
           toxenv: py
           tox_extra_args: "-n 4"
           test_mypyc: true
-        - name: Test suite with py314t-ubuntu, mypyc-compiled
+        - name: Test suite with py315-ubuntu-riscv64, mypyc-compiled
+          python: '3.15'
+          os: ubuntu-24.04-riscv
+          toxenv: py
+          tox_extra_args: "-n 4"
+          test_mypyc: true
+          allow_failure: true
+        - name: Test suite with py314-ubuntu-riscv64, mypyc-compiled
+          python: '3.14'
+          os: ubuntu-24.04-riscv
+          toxenv: py
+          tox_extra_args: "-n 4"
+          test_mypyc: true
+          allow_failure: true
+        - name: Test suite with py314t-ubuntu-arm, mypyc-compiled
           python: '3.14t'
           os: ubuntu-24.04-arm
           toxenv: py
@@ -85,13 +99,13 @@ jobs:
         #   # allow_failure: true
         #   test_mypyc: true
 
-        - name: mypyc runtime tests with py313-macos
+        - name: mypyc runtime tests with py313-macos-latest
           python: '3.13'
           os: macos-latest
           toxenv: py
           tox_extra_args: "-n 3 mypyc/test/test_run.py mypyc/test/test_external.py"
 
-        - name: mypyc runtime tests with py310-ubuntu
+        - name: mypyc runtime tests with py310-ubuntu-latest
           python: '3.10'
           os: ubuntu-latest
           toxenv: py
@@ -107,12 +121,12 @@ jobs:
         #   tox_extra_args: "-n 4 mypyc/test/test_run.py mypyc/test/test_external.py"
         #   debug_build: true
 
-        - name: Parallel tests with py314-ubuntu, interpreted
+        - name: Parallel tests with py314-ubuntu-arm, interpreted
           python: '3.14'
           os: ubuntu-24.04-arm
           toxenv: py
           tox_extra_args: "-n 4 --mypy-num-workers=4 mypy/test/testcheck.py"
-        - name: Parallel tests with py314-ubuntu, mypyc-compiled
+        - name: Parallel tests with py314-ubuntu-arm, mypyc-compiled
           python: '3.14'
           os: ubuntu-24.04-arm
           toxenv: py
@@ -124,7 +138,7 @@ jobs:
           toxenv: py
           tox_extra_args: "-n 2 --mypy-num-workers=2 mypy/test/testcheck.py -k 'incremental or modules or classes'"
 
-        - name: Type check our own code (py310-ubuntu)
+        - name: Type check our own code (py310-ubuntu-latest)
           python: '3.10'
           os: ubuntu-latest
           toxenv: type
@@ -142,7 +156,7 @@ jobs:
           toxenv: lint
 
     name: ${{ matrix.name }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ matrix.os == 'ubuntu-24.04-riscv' && 360 || 60 }}
     env:
       TOX_SKIP_MISSING_INTERPRETERS: False
       VIRTUALENV_SYSTEM_SITE_PACKAGES: ${{ matrix.test_mypyc && 1 || 0 }}
@@ -198,11 +212,12 @@ jobs:
           sudo ln -s /opt/pythondev/bin/python3 /opt/pythondev/bin/python
           sudo ln -s /opt/pythondev/bin/pip3 /opt/pythondev/bin/pip
           echo "/opt/pythondev/bin" >> $GITHUB_PATH
-    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+    - uses: actions/setup-python@ad3497abcd142e169a10aac37abd5175c44f33c4
       if: ${{ !(matrix.debug_build || endsWith(matrix.python, '-dev')) }}
       with:
         python-version: ${{ matrix.python }}
         allow-prereleases: true
+        mirror: ${{ matrix.os == 'ubuntu-24.04-riscv' && 'https://raw.githubusercontent.com/riseproject-dev/python-versions/main' || '' }}
 
     - name: Install tox
       run: |
@@ -219,9 +234,14 @@ jobs:
       if: ${{ matrix.test_mypyc }}
       # Use local version of librt during self-compilation in tests.
       run: |
-        pip install -r test-requirements.txt
-        pip install -U mypyc/lib-rt
-        CC=clang MYPYC_OPT_LEVEL=0 MYPY_USE_MYPYC=1 pip install -e .
+        cat > $PWD/setuptools-build_ext-parallel.cfg <<EOF
+        [build_ext]
+        parallel=$(nproc)
+        EOF
+        export DIST_EXTRA_CONFIG=$PWD/setuptools-build_ext-parallel.cfg
+        pip install --verbose -r test-requirements.txt
+        pip install --verbose -U mypyc/lib-rt
+        CC=clang${{ matrix.os == 'ubuntu-24.04-riscv' && '-18 MYPYC_MULTI_FILE=1' || ''}} MYPYC_OPT_LEVEL=0 MYPY_USE_MYPYC=1 pip install --verbose -e .
 
     - name: Setup tox environment
       run: |
